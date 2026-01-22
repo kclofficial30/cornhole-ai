@@ -3,26 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KCA AI 분석기 v5.0</title>
+    <title>KCA AI 분석 데이터 센터 v6.0</title>
     <style>
-        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --yellow: #f1c40f; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --yellow: #f1c40f; --green: #00b894; }
+        body { margin: 0; background: #f1f2f6; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* 로고 헤더 */
+        .header { background: var(--dark); padding: 12px; text-align: center; }
+        .header img { height: 35px; }
 
-        /* 진단 메시지 창 */
-        #status-bar { background: rgba(0,0,0,0.8); padding: 10px; font-size: 12px; text-align: center; color: var(--yellow); z-index: 100; border-bottom: 1px solid #333; }
+        /* 분석 대시보드 */
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; background: #fff; border-bottom: 2px solid #ddd; }
+        .stat-card { background: #f8f9fa; padding: 10px; border-radius: 8px; text-align: center; border-left: 4px solid var(--blue); }
+        .stat-label { font-size: 11px; color: #636e72; font-weight: bold; }
+        .stat-val { font-size: 1.5rem; font-weight: 800; color: var(--dark); }
 
-        .view-container { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #111; }
+        /* 비디오 영역 */
+        .view-container { position: relative; flex: 1; background: #000; overflow: hidden; }
         video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
         .mirror { transform: scaleX(-1); }
 
-        /* 로딩 레이어 */
-        #loading-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
-        .spinner { border: 4px solid #333; border-top: 4px solid var(--yellow); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* 기록 컨트롤 */
+        .controls { padding: 15px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+        .row { display: flex; gap: 8px; }
+        .btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer; color: white; }
+        .btn-record { background: var(--red); }
+        .btn-save { background: var(--green); }
         
-        .controls { padding: 20px; background: #000; display: flex; gap: 10px; z-index: 100; }
-        .btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; background: #333; color: white; cursor: pointer; }
+        /* 데이터 로그 테이블 */
+        .data-log { height: 120px; overflow-y: auto; background: #eee; font-size: 11px; padding: 5px; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th { background: #ddd; position: sticky; top: 0; }
+        td, th { padding: 5px; border: 1px solid #eee; text-align: center; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -30,13 +42,20 @@
 </head>
 <body>
 
-<div id="loading-layer">
-    <div class="spinner"></div>
-    <div id="loading-text">AI 엔진 데이터 로딩 중...</div>
-    <div style="font-size: 11px; color: #666; margin-top: 10px;">카톡 앱이 아닌 Safari/Chrome에서 열어주세요.</div>
+<div class="header">
+    <img src="https://www.cornhole.kr/html/img/logo.png" alt="KCA">
 </div>
 
-<div id="status-bar">카메라 준비 중...</div>
+<div class="dashboard">
+    <div class="stat-card">
+        <div class="stat-label">현재 팔 각도</div>
+        <div class="stat-val" id="live-angle">0°</div>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--red);">
+        <div class="stat-label">최대 스윙 각도</div>
+        <div class="stat-val" id="max-angle">0°</div>
+    </div>
+</div>
 
 <div class="view-container">
     <video id="input_video" playsinline muted></video>
@@ -44,31 +63,36 @@
 </div>
 
 <div class="controls">
-    <button class="btn" style="background:var(--blue)" onclick="toggleCamera()">📷 카메라 전환</button>
-    <button class="btn" onclick="location.reload()">🔄 다시 시도</button>
+    <div class="row">
+        <button class="btn btn-record" onclick="logData()">💾 현재 자세 수치 기록</button>
+        <button class="btn btn-save" onclick="exportData()">📊 엑셀 저장 (CSV)</button>
+    </div>
+    <div class="data-log">
+        <table>
+            <thead><tr><th>회차</th><th>각도</th><th>시간</th></tr></thead>
+            <tbody id="log-body"></tbody>
+        </table>
+    </div>
 </div>
 
 <script>
     const videoElement = document.getElementById('input_video');
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
-    const statusBar = document.getElementById('status-bar');
-    const loadingLayer = document.getElementById('loading-layer');
+    
+    let recordedData = [];
+    let currentAngle = 0;
+    let maxAngle = 0;
 
-    let camera = null;
-    let currentMode = 'user'; // 'user' 또는 'environment'
-
-    // 보안 환경 체크
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        alert("⚠️ [보안 경고] AI 카메라는 반드시 HTTPS 보안 주소에서만 작동합니다. GitHub Pages 등을 이용해 주세요.");
+    // 관절 사이의 각도를 계산하는 함수
+    function calculateAngle(a, b, c) {
+        const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if (angle > 180.0) angle = 360 - angle;
+        return Math.round(angle);
     }
 
     function onResults(results) {
-        if (loadingLayer.style.display !== 'none') {
-            loadingLayer.style.display = 'none';
-            statusBar.innerText = "분석 시작 - 전신이 나오도록 비춰주세요.";
-        }
-
         canvasElement.width = videoElement.videoWidth;
         canvasElement.height = videoElement.videoHeight;
         canvasCtx.save();
@@ -76,53 +100,61 @@
         canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
         if (results.poseLandmarks) {
-            drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
-            drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2, radius: 3});
+            const landmarks = results.poseLandmarks;
+            
+            // 오른쪽 팔 관절 좌표 (어깨: 12, 팔꿈치: 14, 손목: 16)
+            const shoulder = landmarks[12];
+            const elbow = landmarks[14];
+            const wrist = landmarks[16];
+
+            if (shoulder && elbow && wrist) {
+                currentAngle = calculateAngle(shoulder, elbow, wrist);
+                document.getElementById('live-angle').innerText = `${currentAngle}°`;
+                
+                if(currentAngle > maxAngle) {
+                    maxAngle = currentAngle;
+                    document.getElementById('max-angle').innerText = `${maxAngle}°`;
+                }
+            }
+
+            drawConnectors(canvasCtx, landmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+            drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2, radius: 3});
         }
         canvasCtx.restore();
     }
 
-    const pose = new Pose({locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
-    }});
-
+    const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
     pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     pose.onResults(onResults);
 
-    async function startCamera() {
-        statusBar.innerText = "카메라 권한 요청 중...";
+    const camera = new Camera(videoElement, {
+        onFrame: async () => { await pose.send({image: videoElement}); },
+        width: 1280, height: 720
+    });
+    camera.start();
+
+    // 데이터 로그 남기기
+    function logData() {
+        const time = new Date().toLocaleTimeString();
+        recordedData.push({ angle: currentAngle, time: time });
         
-        if (camera) { await camera.stop(); }
+        const row = document.getElementById('log-body').insertRow(0);
+        row.innerHTML = `<td>${recordedData.length}</td><td>${currentAngle}°</td><td>${time}</td>`;
+        maxAngle = 0; // 기록 후 최대각도 초기화
+    }
 
-        // 전면 카메라일 때만 거울 효과
-        const isMirror = (currentMode === 'user');
-        videoElement.className = isMirror ? 'mirror' : '';
-        canvasElement.className = isMirror ? 'mirror' : '';
-
-        camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await pose.send({image: videoElement});
-            },
-            facingMode: currentMode,
-            width: 1280,
-            height: 720
+    // 엑셀 저장
+    function exportData() {
+        let csv = "\uFEFF회차,투구각도,기록시간\n";
+        recordedData.forEach((d, i) => {
+            csv += `${i+1},${d.angle},${d.time}\n`;
         });
-
-        try {
-            await camera.start();
-        } catch (e) {
-            statusBar.innerText = "오류: 카메라를 찾을 수 없거나 권한이 거부되었습니다.";
-            console.error(e);
-        }
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "KCA_피칭분석데이터.csv";
+        link.click();
     }
-
-    function toggleCamera() {
-        currentMode = (currentMode === 'user') ? 'environment' : 'user';
-        startCamera();
-    }
-
-    // 초기 실행
-    window.onload = startCamera;
 </script>
 </body>
 </html>
