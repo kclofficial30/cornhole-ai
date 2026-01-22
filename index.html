@@ -3,28 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KCA 골프형 정밀 분석기 v13.0</title>
+    <title>KCA AI 마스터 v14.0</title>
     <style>
-        :root { --red: #d63031; --blue: #0984e3; --dark: #000; --green: #00b894; --yellow: #f1c40f; }
+        :root { --red: #d63031; --blue: #0984e3; --dark: #1e272e; --green: #00b894; --yellow: #f1c40f; }
         body { margin: 0; background: #f1f2f6; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        .header { background: var(--dark); padding: 10px; text-align: center; }
+        
+        .header { background: #000; padding: 10px; text-align: center; }
         .header img { height: 25px; }
         
-        /* 분석 대시보드 - 골프 분석기 스타일 */
-        .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 10px; background: #1e272e; color: #fff; }
-        .stat-box { background: #2f3640; padding: 5px; border-radius: 5px; text-align: center; }
-        .label { font-size: 9px; color: #dcdde1; font-weight: bold; }
-        .val { font-size: 1.1rem; font-weight: 800; color: var(--yellow); }
+        /* 분석 대시보드 */
+        .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 10px; background: var(--dark); color: #fff; }
+        .stat-box { background: #2f3640; padding: 8px; border-radius: 8px; text-align: center; border-bottom: 3px solid #555; }
+        .label { font-size: 10px; color: #aaa; font-weight: bold; }
+        .val { font-size: 1.2rem; font-weight: 800; color: var(--yellow); }
 
-        .view-container { position: relative; flex: 1; background: #000; overflow: hidden; }
+        /* 비디오 영역 */
+        .view-container { position: relative; flex: 1; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
         video, canvas { position: absolute; width: 100%; height: 100%; object-fit: contain; }
+        .mirror { transform: scaleX(-1); }
+
+        /* 컨트롤 패널 */
+        .ui-panel { background: #fff; padding: 15px; border-top: 2px solid #ddd; z-index: 100; max-height: 50vh; overflow-y: auto; }
+        .btn { padding: 15px; border: none; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; color: white; width: 100%; margin-bottom: 8px; }
         
-        .ui-panel { background: #fff; padding: 12px; border-top: 1px solid #ddd; z-index: 100; max-height: 40vh; overflow-y: auto; }
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .btn { padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 0.9rem; cursor: pointer; color: white; }
-        
-        /* 궤적 가이드 설정 */
-        .guide-line { position: absolute; border: 1px dashed rgba(255,255,255,0.5); pointer-events: none; }
+        .mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        .btn-cam { background: var(--blue); }
+        .btn-upload { background: var(--dark); }
+        .btn-rec { background: var(--red); }
+
+        /* 슬로우 비디오 컨트롤러 */
+        .video-player-ui { background: #eee; padding: 10px; border-radius: 10px; margin-bottom: 10px; display: none; flex-direction: column; gap: 8px; }
+        #seek-bar { width: 100%; height: 30px; }
+        .player-btns { display: flex; gap: 5px; }
+        .p-btn { flex: 1; padding: 8px; border: none; border-radius: 5px; background: #555; color: #fff; font-size: 12px; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -36,104 +47,150 @@
 
 <div class="dashboard">
     <div class="stat-box"><div class="label">LIVE ANGLE</div><div class="val" id="angle-val">0°</div></div>
-    <div class="stat-box"><div class="label">MAX BACK</div><div class="val" id="max-back">0°</div></div>
-    <div class="stat-box"><div class="label">STANCE</div><div class="val" id="stance-val">OK</div></div>
+    <div class="stat-box"><div class="label">MAX BACK</div><div class="val" id="max-angle">0°</div></div>
     <div class="stat-box"><div class="label">RELEASE</div><div class="val" id="rel-val">-</div></div>
 </div>
 
-<div class="view-container" id="container">
-    <video id="input_video" playsinline muted style="display:none;"></video>
+<div class="view-container">
+    <video id="input_video" playsinline muted crossorigin="anonymous"></video>
     <canvas id="output_canvas"></canvas>
-    <div class="guide-line" style="top:20%; bottom:20%; left:50%; width:0;"></div>
-    <div class="guide-line" style="left:10%; right:10%; top:50%; height:0;"></div>
 </div>
 
 <div class="ui-panel">
-    <div class="btn-grid">
-        <button class="btn" style="background:var(--red); grid-column: span 2;" onclick="startAnalysis()">🔴 분석 및 녹화 시작</button>
-        <button class="btn" style="background:var(--dark)" onclick="clearCanvas()">✨ 궤적 초기화</button>
-        <button class="btn" style="background:var(--blue)" onclick="exportData()">📊 데이터 저장</button>
+    <button class="btn btn-cam" onclick="startLiveCamera()">📸 실시간 카메라 시작 (아이폰 필수)</button>
+
+    <div class="mode-switch">
+        <label class="btn btn-upload" style="text-align:center; line-height:1.2;">
+            📂 슬로우 영상 선택
+            <input type="file" id="video-upload" accept="video/*" style="display:none;" onchange="loadVideo(event)">
+        </label>
+        <button class="btn btn-rec" onclick="toggleRecording()">🔴 분석 녹화</button>
     </div>
-    <div style="margin-top:10px; font-size:11px; color:#666;">
-        * 파란색 궤적: 백스윙 / 빨간색 궤적: 전진 피칭<br>
-        * 중앙 가이드라인에 맞춰 몸의 축을 고정하세요.
+
+    <div class="video-player-ui" id="video-controls">
+        <input type="range" id="seek-bar" value="0">
+        <div class="player-btns">
+            <button class="p-btn" onclick="togglePlay()">재생/일시정지</button>
+            <button class="p-btn" onclick="changeSpeed(0.25)">0.25x</button>
+            <button class="p-btn" onclick="changeSpeed(0.5)">0.5x</button>
+            <button class="p-btn" onclick="changeSpeed(1)">1x</button>
+        </div>
     </div>
+    
+    <button class="btn" style="background:var(--green)" onclick="exportCSV()">📊 분석 데이터 저장</button>
 </div>
 
 <script>
     const video = document.getElementById('input_video');
     const canvas = document.getElementById('output_canvas');
     const ctx = canvas.getContext('2d');
+    const seekBar = document.getElementById('seek-bar');
     
-    let backTrajectory = []; // 백스윙 (파랑)
-    let forwardTrajectory = []; // 피칭 (빨강)
-    let isBackswing = true;
-    let prevWristY = 0;
-    let maxBackAngle = 0;
+    let pose, camera;
+    let trajectoryPoints = [];
+    let isLive = true;
+    let maxAngle = 0;
 
-    const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
-    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    // AI 설정 초기화
+    function initAI() {
+        pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+        pose.onResults(onResults);
+    }
 
     function onResults(results) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         ctx.save();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+        
+        if(isLive) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
         ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
         if (results.poseLandmarks) {
             const lm = results.poseLandmarks;
-            const wrist = lm[16]; // 오른손 기준
-            const elbow = lm[14];
-            const shoulder = lm[12];
-
-            // 1. 각도 계산
-            const radians = Math.atan2(wrist.y - elbow.y, wrist.x - elbow.x) - Math.atan2(shoulder.y - elbow.y, shoulder.x - elbow.x);
-            let angle = Math.abs(radians * 180.0 / Math.PI);
-            if (angle > 180) angle = 360 - angle;
-            angle = Math.round(angle);
+            // 각도 계산 (오른쪽 어깨-팔꿈치-손목)
+            const angle = calculateAngle(lm[12], lm[14], lm[16]);
             document.getElementById('angle-val').innerText = `${angle}°`;
-
-            // 2. 백스윙 vs 피칭 전환 감지 (Y좌표 변화 기준)
-            if (wrist.y > prevWristY) isBackswing = true; // 내려가거나 뒤로 감
-            else isBackswing = false; // 위로 던짐
-            prevWristY = wrist.y;
-
-            if (isBackswing && angle > maxBackAngle) {
-                maxBackAngle = angle;
-                document.getElementById('max-back').innerText = `${maxBackAngle}°`;
+            if(angle > maxAngle) {
+                maxAngle = angle;
+                document.getElementById('max-angle').innerText = `${maxAngle}°`;
             }
 
-            // 3. 궤적 기록 (색상 구분)
-            const p = {x: wrist.x * canvas.width, y: wrist.y * canvas.height};
-            if (isBackswing) {
-                backTrajectory.push(p); if(backTrajectory.length > 30) backTrajectory.shift();
-            } else {
-                forwardTrajectory.push(p); if(forwardTrajectory.length > 30) forwardTrajectory.shift();
-            }
+            // 궤적 (손목 16)
+            const wrist = lm[16];
+            trajectoryPoints.push({x: wrist.x * canvas.width, y: wrist.y * canvas.height});
+            if(trajectoryPoints.length > 50) trajectoryPoints.shift();
 
-            // 4. 렌더링
-            drawTrajectory(backTrajectory, '#0984e3'); // 파랑
-            drawTrajectory(forwardTrajectory, '#d63031'); // 빨강
-            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#ffffff', lineWidth: 2});
-            drawLandmarks(ctx, lm, {color: '#f1c40f', radius: 2});
+            // 궤적 그리기
+            ctx.beginPath();
+            ctx.moveTo(trajectoryPoints[0].x, trajectoryPoints[0].y);
+            trajectoryPoints.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 5; ctx.stroke();
+
+            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+            drawLandmarks(ctx, lm, {color: '#FF0000', radius: 2});
         }
         ctx.restore();
     }
 
-    function drawTrajectory(points, color) {
-        if (points.length < 2) return;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        points.forEach(pt => ctx.lineTo(pt.x, pt.y));
-        ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.stroke();
+    function calculateAngle(a, b, c) {
+        const radians = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if(angle > 180) angle = 360 - angle;
+        return Math.round(angle);
     }
 
-    const camera = new Camera(video, { onFrame: async () => { await pose.send({image: video}); }, width: 1280, height: 720 });
-    camera.start();
+    // 카메라 시작 (사용자 클릭 필수)
+    async function startLiveCamera() {
+        isLive = true;
+        document.getElementById('video-controls').style.display = 'none';
+        video.classList.add('mirror'); canvas.classList.add('mirror');
+        
+        if(!pose) initAI();
+        
+        camera = new Camera(video, {
+            onFrame: async () => { await pose.send({image: video}); },
+            width: 1280, height: 720
+        });
+        await camera.start();
+        alert("실시간 카메라 분석이 시작되었습니다.");
+    }
 
-    function clearCanvas() { backTrajectory = []; forwardTrajectory = []; maxBackAngle = 0; }
+    // 비디오 파일 로드
+    function loadVideo(event) {
+        const file = event.target.files[0];
+        if (file) {
+            isLive = false;
+            video.src = URL.createObjectURL(file);
+            video.classList.remove('mirror'); canvas.classList.remove('mirror');
+            document.getElementById('video-controls').style.display = 'flex';
+            
+            if(!pose) initAI();
+            video.play();
+        }
+    }
+
+    // 비디오 분석 루프
+    async function processVideoFrame() {
+        if (!video.paused && !video.ended) {
+            await pose.send({image: video});
+            requestAnimationFrame(processVideoFrame);
+        }
+    }
+    video.onplay = processVideoFrame;
+
+    // 플레이어 컨트롤
+    function togglePlay() { 
+        if(video.paused) video.play(); else video.pause(); 
+        pose.send({image: video}); // 멈췄을 때도 분석 유지
+    }
+    function changeSpeed(speed) { video.playbackRate = speed; }
+    
+    video.ontimeupdate = () => { seekBar.value = (video.currentTime / video.duration) * 100; };
+    seekBar.oninput = () => { video.currentTime = (seekBar.value / 100) * video.duration; pose.send({image: video}); };
+
+    window.onload = initAI;
 </script>
 </body>
 </html>
