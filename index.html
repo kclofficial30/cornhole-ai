@@ -3,43 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KCA AI 비교 분석기 v7.0</title>
+    <title>KCA AI 비디오 분석기 v8.0</title>
     <style>
         :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --green: #00b894; --yellow: #f1c40f; }
         body { margin: 0; background: #f1f2f6; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
         .header { background: var(--dark); padding: 10px; text-align: center; }
-        .header img { height: 35px; }
+        .header img { height: 30px; }
 
-        /* [변경] 비교 대시보드 */
+        /* 대시보드 */
         .dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; padding: 10px; background: #fff; border-bottom: 2px solid #ddd; }
         .stat-box { background: #f8f9fa; padding: 8px; border-radius: 8px; text-align: center; border-bottom: 3px solid #ccc; }
-        .label { font-size: 10px; color: #636e72; font-weight: bold; margin-bottom: 2px; }
-        .val { font-size: 1.2rem; font-weight: 800; }
-        .diff-plus { color: var(--red); }
-        .diff-minus { color: var(--blue); }
+        .label { font-size: 10px; color: #636e72; font-weight: bold; }
+        .val { font-size: 1.1rem; font-weight: 800; }
 
-        /* 비디오 영역 */
+        /* 비디오 컨테이너 */
         .view-container { position: relative; flex: 1; background: #000; overflow: hidden; }
-        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: contain; }
         .mirror { transform: scaleX(-1); }
 
-        /* 컨트롤 영역 */
-        .controls { padding: 15px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .btn { padding: 18px; border: none; border-radius: 12px; font-weight: bold; font-size: 1rem; color: white; cursor: pointer; }
-        .btn-base { background: var(--dark); } /* 기준점 설정 */
-        .btn-cap { background: var(--red); } /* 현재 캡처 */
-        .btn-save { background: var(--green); width: 100%; }
+        /* 입력 설정 및 비디오 컨트롤 */
+        .ui-panel { background: #fff; padding: 10px; border-top: 1px solid #ddd; }
+        .file-input-group { margin-bottom: 10px; display: flex; gap: 5px; align-items: center; }
+        #video-upload { flex: 1; font-size: 12px; }
+        
+        .vid-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        #seek-bar { flex: 1; }
 
-        /* 기록 테이블 */
-        .log-container { height: 150px; overflow-y: auto; background: white; font-size: 11px; border-top: 1px solid #ddd; }
+        /* 버튼 그룹 */
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .btn { padding: 15px; border: none; border-radius: 10px; font-weight: bold; font-size: 0.9rem; color: white; cursor: pointer; }
+        .btn-base { background: var(--dark); }
+        .btn-cap { background: var(--red); }
+        .btn-save { background: var(--green); width: 100%; padding: 12px; margin-top: 5px; }
+
+        /* 로그 */
+        .log-container { height: 100px; overflow-y: auto; background: white; font-size: 10px; border-top: 1px solid #ddd; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; }
-        th { background: #f8f9fa; position: sticky; top: 0; }
+        th, td { padding: 6px; border-bottom: 1px solid #eee; text-align: center; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -47,48 +50,58 @@
 <div class="header"><img src="https://www.cornhole.kr/html/img/logo.png" alt="KCA"></div>
 
 <div class="dashboard">
-    <div class="stat-box" style="border-color: var(--dark);">
-        <div class="label">기준(Standard)</div>
-        <div class="val" id="base-val">0°</div>
-    </div>
-    <div class="stat-box" style="border-color: var(--red);">
-        <div class="label">현재(Current)</div>
-        <div class="val" id="curr-val">0°</div>
-    </div>
-    <div class="stat-box" style="border-color: var(--green);">
-        <div class="label">오차(Diff)</div>
-        <div class="val" id="diff-val">0°</div>
-    </div>
+    <div class="stat-box" style="border-color: var(--dark);"><div class="label">기준</div><div class="val" id="base-val">0°</div></div>
+    <div class="stat-box" style="border-color: var(--red);"><div class="label">현재</div><div class="val" id="curr-val">0°</div></div>
+    <div class="stat-box" style="border-color: var(--green);"><div class="label">오차</div><div class="val" id="diff-val">0°</div></div>
 </div>
 
 <div class="view-container">
-    <video id="input_video" playsinline muted></video>
+    <video id="input_video" playsinline muted crossorigin="anonymous"></video>
     <canvas id="output_canvas"></canvas>
 </div>
 
-<div class="controls">
+<div class="ui-panel">
+    <div class="file-input-group">
+        <input type="file" id="video-upload" accept="video/*">
+        <button onclick="useCamera()" style="padding:5px 10px; font-size:11px;">실시간 카메라</button>
+    </div>
+    
+    <div class="vid-controls" id="vid-ctrl" style="display:none;">
+        <button id="play-pause" onclick="togglePlay()" style="width:50px;">▶</button>
+        <input type="range" id="seek-bar" value="0" step="0.1">
+    </div>
+
     <div class="btn-group">
         <button class="btn btn-base" onclick="setBaseline()">📐 기준자세 등록</button>
-        <button class="btn btn-cap" onclick="captureAndLog()">📸 현재 피칭 기록</button>
+        <button class="btn btn-cap" onclick="captureAndLog()">📸 분석 데이터 기록</button>
     </div>
-    <button class="btn btn-save" onclick="exportCSV()">📊 분석 데이터 저장 (CSV)</button>
-    
-    <div class="log-container">
-        <table>
-            <thead><tr><th>회차</th><th>기준</th><th>기록</th><th>오차</th></tr></thead>
-            <tbody id="log-body"></tbody>
-        </table>
-    </div>
+    <button class="btn btn-save" onclick="exportCSV()">📊 엑셀 데이터 저장 (CSV)</button>
+</div>
+
+<div class="log-container">
+    <table>
+        <thead><tr><th>회차</th><th>기준</th><th>기록</th><th>오차</th></tr></thead>
+        <tbody id="log-body"></tbody>
+    </table>
 </div>
 
 <script>
-    const videoElement = document.getElementById('input_video');
-    const canvasElement = document.getElementById('output_canvas');
-    const canvasCtx = canvasElement.getContext('2d');
-    
+    const video = document.getElementById('input_video');
+    const canvas = document.getElementById('output_canvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('video-upload');
+    const seekBar = document.getElementById('seek-bar');
+    const playBtn = document.getElementById('play-pause');
+
     let baselineAngle = 0;
     let currentAngle = 0;
     let analysisHistory = [];
+    let isVideoFile = false;
+
+    // AI 설정
+    const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    pose.onResults(onResults);
 
     function calculateAngle(a, b, c) {
         const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -98,77 +111,99 @@
     }
 
     function onResults(results) {
-        canvasElement.width = videoElement.videoWidth;
-        canvasElement.height = videoElement.videoHeight;
-        canvasCtx.save();
-        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.save();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
         if (results.poseLandmarks) {
             const lm = results.poseLandmarks;
-            // 오른쪽 팔 (12:어깨, 14:팔꿈치, 16:손목)
+            // 오른쪽 팔 각도 분석 (어깨 12, 팔꿈치 14, 손목 16)
             if(lm[12] && lm[14] && lm[16]) {
                 currentAngle = calculateAngle(lm[12], lm[14], lm[16]);
                 document.getElementById('curr-val').innerText = `${currentAngle}°`;
-                
-                // 오차 실시간 계산
                 if(baselineAngle > 0) {
                     const diff = currentAngle - baselineAngle;
-                    const diffDisp = document.getElementById('diff-val');
-                    diffDisp.innerText = (diff > 0 ? "+" : "") + diff + "°";
-                    diffDisp.className = "val " + (diff >= 0 ? "diff-plus" : "diff-minus");
+                    document.getElementById('diff-val').innerText = (diff > 0 ? "+" : "") + diff + "°";
                 }
             }
-            drawConnectors(canvasCtx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
-            drawLandmarks(canvasCtx, lm, {color: '#FF0000', radius: 3});
+            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+            drawLandmarks(ctx, lm, {color: '#FF0000', radius: 3});
         }
-        canvasCtx.restore();
+        ctx.restore();
     }
 
-    const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-    pose.onResults(onResults);
+    // 비디오 파일 업로드 처리
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            isVideoFile = true;
+            video.src = URL.createObjectURL(file);
+            video.classList.remove('mirror');
+            canvas.classList.remove('mirror');
+            document.getElementById('vid-ctrl').style.display = 'flex';
+            video.play();
+        }
+    });
 
-    new Camera(videoElement, {
-        onFrame: async () => { await pose.send({image: videoElement}); },
-        width: 1280, height: 720
-    }).start();
+    // 카메라 모드로 전환
+    async function useCamera() {
+        isVideoFile = false;
+        document.getElementById('vid-ctrl').style.display = 'none';
+        video.classList.add('mirror');
+        canvas.classList.add('mirror');
+        const stream = await navigator.mediaDevices.getUserMedia({video: true});
+        video.srcObject = stream;
+        video.play();
+    }
 
-    // [로직] 기준점 설정
+    // 비디오 프레임 처리 루프
+    async function processFrame() {
+        if (!video.paused && !video.ended) {
+            await pose.send({image: video});
+        }
+        requestAnimationFrame(processFrame);
+    }
+    video.addEventListener('play', processFrame);
+
+    // [로직] 재생/일시정지
+    function togglePlay() {
+        if (video.paused) { video.play(); playBtn.innerText = "||"; }
+        else { video.pause(); playBtn.innerText = "▶"; pose.send({image: video}); } // 일시정지 시 한 번 더 분석
+    }
+
+    // [로직] 탐색 바 조절
+    video.addEventListener('timeupdate', () => {
+        const val = (video.currentTime / video.duration) * 100;
+        seekBar.value = val;
+    });
+    seekBar.addEventListener('input', () => {
+        const time = (seekBar.value / 100) * video.duration;
+        video.currentTime = time;
+        pose.send({image: video}); // 드래그하는 동안 실시간 분석
+    });
+
     function setBaseline() {
         baselineAngle = currentAngle;
         document.getElementById('base-val').innerText = `${baselineAngle}°`;
-        alert("현재 각도가 기준 자세로 등록되었습니다: " + baselineAngle + "°");
     }
 
-    // [로직] 현재 시점 캡처 및 로그 기록
     function captureAndLog() {
-        if(baselineAngle === 0) {
-            alert("먼저 '기준자세 등록'을 완료해주세요.");
-            return;
-        }
-        const diff = currentAngle - baselineAngle;
-        const record = {
-            base: baselineAngle,
-            curr: currentAngle,
-            diff: diff,
-            time: new Date().toLocaleTimeString()
-        };
+        if(baselineAngle === 0) { alert("먼저 기준자세를 등록하세요."); return; }
+        const record = { base: baselineAngle, curr: currentAngle, diff: currentAngle - baselineAngle, time: new Date().toLocaleTimeString() };
         analysisHistory.push(record);
-
         const row = document.getElementById('log-body').insertRow(0);
-        row.innerHTML = `<td>${analysisHistory.length}</td><td>${record.base}°</td><td>${record.curr}°</td><td class="${diff>=0?'diff-plus':'diff-minus'}">${diff > 0 ? "+" : ""}${diff}°</td>`;
+        row.innerHTML = `<td>${analysisHistory.length}</td><td>${record.base}°</td><td>${record.curr}°</td><td>${record.diff > 0 ? "+" : ""}${record.diff}°</td>`;
     }
 
     function exportCSV() {
-        let csv = "\uFEFF회차,기준각도,투구각도,오차,기록시간\n";
-        analysisHistory.forEach((d, i) => {
-            csv += `${i+1},${d.base},${d.curr},${d.diff},${d.time}\n`;
-        });
+        let csv = "\uFEFF회차,기준각도,분석각도,오차,기록시간\n";
+        analysisHistory.forEach((d, i) => { csv += `${i+1},${d.base},${d.curr},${d.diff},${d.time}\n`; });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = "KCA_자세비교분석.csv";
+        link.download = "KCA_비디오_정밀분석.csv";
         link.click();
     }
 </script>
