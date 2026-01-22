@@ -3,46 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KCA AI 궤적 분석기 v9.0</title>
+    <title>KCA AI 비디오 리포트 v10.0</title>
     <style>
-        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --green: #00b894; --yellow: #f1c40f; --gold: #FFD700; }
+        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --green: #00b894; --yellow: #f1c40f; }
         body { margin: 0; background: #f1f2f6; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
         .header { background: var(--dark); padding: 10px; text-align: center; }
         .header img { height: 30px; }
 
-        /* 대시보드 */
+        /* 대시보드 지표 */
         .dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; padding: 10px; background: #fff; border-bottom: 2px solid #ddd; }
         .stat-box { background: #f8f9fa; padding: 8px; border-radius: 8px; text-align: center; border-bottom: 3px solid #ccc; }
         .label { font-size: 10px; color: #636e72; font-weight: bold; }
         .val { font-size: 1.1rem; font-weight: 800; }
 
-        /* 비디오 컨테이너 */
+        /* 뷰어 영역 */
         .view-container { position: relative; flex: 1; background: #000; overflow: hidden; }
         video, canvas { position: absolute; width: 100%; height: 100%; object-fit: contain; }
-        .mirror { transform: scaleX(-1); }
 
-        /* UI 패널 */
-        .ui-panel { background: #fff; padding: 10px; border-top: 1px solid #ddd; overflow-y: auto; max-height: 40vh; }
-        .file-input-group { margin-bottom: 10px; display: flex; gap: 5px; align-items: center; }
-        #video-upload { flex: 1; font-size: 12px; }
+        /* 하단 패널 */
+        .ui-panel { background: #fff; padding: 10px; border-top: 1px solid #ddd; overflow-y: auto; max-height: 45vh; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .btn { padding: 15px; border: none; border-radius: 10px; font-weight: bold; font-size: 0.9rem; color: white; cursor: pointer; }
+        .btn-rec { background: var(--red); } /* 녹화 버튼 */
+        .btn-stop { background: var(--dark); display: none; } /* 녹화 중지 */
+        .btn-cap { background: var(--blue); } /* 릴리즈 타이밍 캡처 */
         
-        .vid-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        #seek-bar { flex: 1; height: 30px; }
-        #play-pause { width: 50px; height: 30px; }
-
-        /* 버튼 그룹 */
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px; }
-        .btn { padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 0.85rem; color: white; cursor: pointer; }
-        .btn-base { background: var(--dark); }
-        .btn-cap { background: var(--red); }
-        .btn-clear-traj { background: var(--gold); color: var(--dark); grid-column: span 2; } /* 궤적 지우기 버튼 */
-        .btn-save { background: var(--green); width: 100%; padding: 12px; margin-top: 5px; }
-
-        /* 로그 */
-        .log-container { height: 80px; overflow-y: auto; background: white; font-size: 10px; border-top: 1px solid #ddd; margin-top: 5px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 5px; border-bottom: 1px solid #eee; text-align: center; }
+        /* 밸런스 경고등 */
+        #balance-indicator { font-size: 10px; font-weight: bold; margin-bottom: 5px; text-align: center; }
+        .balance-ok { color: var(--green); }
+        .balance-bad { color: var(--red); }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -52,9 +41,9 @@
 <div class="header"><img src="https://www.cornhole.kr/html/img/logo.png" alt="KCA"></div>
 
 <div class="dashboard">
-    <div class="stat-box" style="border-color: var(--dark);"><div class="label">기준(Base)</div><div class="val" id="base-val">0°</div></div>
-    <div class="stat-box" style="border-color: var(--red);"><div class="label">현재(Curr)</div><div class="val" id="curr-val">0°</div></div>
-    <div class="stat-box" style="border-color: var(--green);"><div class="label">오차(Diff)</div><div class="val" id="diff-val">0°</div></div>
+    <div class="stat-box"><div class="label">팔 각도</div><div class="val" id="angle-val">0°</div></div>
+    <div class="stat-box"><div class="label">좌우 밸런스</div><div class="val" id="balance-val">0°</div></div>
+    <div class="stat-box"><div class="label">릴리즈 타이밍</div><div class="val" id="timing-val">-</div></div>
 </div>
 
 <div class="view-container">
@@ -63,25 +52,21 @@
 </div>
 
 <div class="ui-panel">
-    <div class="file-input-group">
-        <input type="file" id="video-upload" accept="video/*">
-        <button onclick="useCamera()" style="padding:5px 8px; font-size:11px; white-space: nowrap;">실시간 카메라</button>
-    </div>
+    <div id="balance-indicator">신체 균형 분석 중...</div>
     
-    <div class="vid-controls" id="vid-ctrl" style="display:none;">
-        <button id="play-pause" onclick="togglePlay()">▶</button>
-        <input type="range" id="seek-bar" value="0" step="0.1">
+    <div class="btn-grid">
+        <button id="rec-start" class="btn btn-rec" onclick="startRecording()">🔴 분석 영상 녹화 시작</button>
+        <button id="rec-stop" class="btn btn-stop" onclick="stopRecording()">⏹ 녹화 중지 및 저장</button>
+        <button class="btn btn-cap" onclick="markRelease()">🎯 릴리즈 시점 고정</button>
     </div>
 
-    <div class="btn-group">
-        <button class="btn btn-base" onclick="setBaseline()">📐 기준 등록</button>
-        <button class="btn btn-cap" onclick="captureAndLog()">📸 데이터 기록</button>
-        <button class="btn btn-clear-traj" onclick="clearTrajectory()">✨ 궤적 지우기</button>
-    </div>
-    <button class="btn btn-save" onclick="exportCSV()">📊 엑셀 저장 (CSV)</button>
+    <input type="file" id="video-upload" accept="video/*" style="width: 100%; margin: 10px 0;">
+    
+    <button class="btn" style="background:var(--green); width: 100%;" onclick="exportData()">📊 분석 데이터 엑셀 저장</button>
 
-    <div class="log-container">
-        <table><thead><tr><th>No</th><th>기준</th><th>기록</th><th>오차</th></tr></thead><tbody id="log-body"></tbody></table>
+    <div style="font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4;">
+        * 릴리즈 시점 고정: 주머니를 놓는 순간 버튼을 누르면 그때의 각도가 기록됩니다.<br>
+        * 녹화 기능: AI 뼈대와 궤적이 포함된 분석 영상이 MP4로 저장됩니다.
     </div>
 </div>
 
@@ -90,17 +75,12 @@
     const canvas = document.getElementById('output_canvas');
     const ctx = canvas.getContext('2d');
     const fileInput = document.getElementById('video-upload');
-    const seekBar = document.getElementById('seek-bar');
-    const playBtn = document.getElementById('play-pause');
 
-    let baselineAngle = 0;
-    let currentAngle = 0;
-    let analysisHistory = [];
-    
-    // [신규] 궤적 추적을 위한 변수
-    let trajectoryPoints = [];
-    const MAX_TRAJECTORY_POINTS = 60; // 약 2초 분량의 궤적만 유지 (잔상 효과)
+    let currentAngle = 0, balanceAngle = 0, releaseAngle = 0;
+    let analysisLog = [];
+    let mediaRecorder, recordedChunks = [];
 
+    // [AI 설정]
     const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
     pose.onResults(onResults);
@@ -122,71 +102,75 @@
         if (results.poseLandmarks) {
             const lm = results.poseLandmarks;
             
-            // 1. 각도 계산 및 표시
-            if(lm[12] && lm[14] && lm[16]) {
-                currentAngle = calculateAngle(lm[12], lm[14], lm[16]);
-                document.getElementById('curr-val').innerText = `${currentAngle}°`;
-                if(baselineAngle > 0) {
-                    const diff = currentAngle - baselineAngle;
-                    document.getElementById('diff-val').innerText = (diff > 0 ? "+" : "") + diff + "°";
-                }
+            // 1. 팔 각도 (어깨 12, 팔꿈치 14, 손목 16)
+            currentAngle = calculateAngle(lm[12], lm[14], lm[16]);
+            document.getElementById('angle-val').innerText = `${currentAngle}°`;
+
+            // 2. 몸의 밸런스 (어깨 11 - 어깨 12 수평 체크)
+            const shoulderLeft = lm[11];
+            const shoulderRight = lm[12];
+            balanceAngle = Math.abs(Math.round((shoulderLeft.y - shoulderRight.y) * 100));
+            document.getElementById('balance-val').innerText = `${balanceAngle}`;
+            
+            const balInd = document.getElementById('balance-indicator');
+            if(balanceAngle < 5) {
+                balInd.innerText = "✅ 신체 밸런스 안정적";
+                balInd.className = "balance-ok";
+            } else {
+                balInd.innerText = "⚠️ 신체 기울어짐 주의";
+                balInd.className = "balance-bad";
             }
 
-            // 2. [신규] 궤적 그리기 (오른쪽 손목: Index 16)
-            const wrist = lm[16];
-            if (wrist.visibility > 0.5) { // 손목이 잘 보일 때만
-                // 좌표를 픽셀 단위로 변환하여 저장
-                trajectoryPoints.push({x: wrist.x * canvas.width, y: wrist.y * canvas.height});
-                // 최대 포인트 개수 유지 (오래된 포인트 삭제)
-                if (trajectoryPoints.length > MAX_TRAJECTORY_POINTS) {
-                    trajectoryPoints.shift();
-                }
-            }
-
-            // 저장된 궤적 포인트들을 선으로 연결
-            if (trajectoryPoints.length > 1) {
-                ctx.beginPath();
-                ctx.moveTo(trajectoryPoints[0].x, trajectoryPoints[0].y);
-                for (let i = 1; i < trajectoryPoints.length; i++) {
-                    ctx.lineTo(trajectoryPoints[i].x, trajectoryPoints[i].y);
-                }
-                ctx.strokeStyle = '#FFD700'; // 금색(노란색) 궤적선
-                ctx.lineWidth = 4;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.stroke();
-            }
-
-            // 3. 스켈레톤 그리기
-            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-            drawLandmarks(ctx, lm, {color: '#FF0000', radius: 3});
+            // 3. 스켈레톤 및 궤적 그리기
+            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 3});
+            drawLandmarks(ctx, lm, {color: '#FF0000', radius: 2});
         }
         ctx.restore();
     }
 
-    // [신규] 궤적 초기화 함수
-    function clearTrajectory() {
-        trajectoryPoints = [];
+    // [영상 녹화 로직]
+    function startRecording() {
+        recordedChunks = [];
+        const stream = canvas.captureStream(30); // 30fps로 캔버스 캡처
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = saveVideo;
+        mediaRecorder.start();
+
+        document.getElementById('rec-start').style.display = 'none';
+        document.getElementById('rec-stop').style.display = 'block';
     }
 
+    function stopRecording() {
+        mediaRecorder.stop();
+        document.getElementById('rec-start').style.display = 'block';
+        document.getElementById('rec-stop').style.display = 'none';
+    }
+
+    function saveVideo() {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `KCA_Analysis_${new Date().getTime()}.webm`;
+        a.click();
+    }
+
+    // [릴리즈 타이밍 마킹]
+    function markRelease() {
+        releaseAngle = currentAngle;
+        const timestamp = video.currentTime.toFixed(2);
+        document.getElementById('timing-val').innerText = `${releaseAngle}° (${timestamp}s)`;
+        analysisLog.push({ angle: releaseAngle, balance: balanceAngle, time: timestamp });
+        alert("릴리즈 시점 데이터가 기록되었습니다.");
+    }
+
+    // 파일 업로드 처리
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) {
-            clearTrajectory(); // 새 비디오 로드 시 궤적 초기화
-            video.src = URL.createObjectURL(file);
-            video.classList.remove('mirror'); canvas.classList.remove('mirror');
-            document.getElementById('vid-ctrl').style.display = 'flex';
-            video.play(); playBtn.innerText = "||";
-        }
+        if (file) { video.src = URL.createObjectURL(file); video.play(); }
     });
-
-    async function useCamera() {
-        clearTrajectory(); // 카메라 전환 시 궤적 초기화
-        document.getElementById('vid-ctrl').style.display = 'none';
-        video.classList.add('mirror'); canvas.classList.add('mirror');
-        const stream = await navigator.mediaDevices.getUserMedia({video: true});
-        video.srcObject = stream; video.play();
-    }
 
     async function processFrame() {
         if (!video.paused && !video.ended) { await pose.send({image: video}); }
@@ -194,30 +178,16 @@
     }
     video.addEventListener('play', processFrame);
 
-    function togglePlay() {
-        if (video.paused) { video.play(); playBtn.innerText = "||"; }
-        else { video.pause(); playBtn.innerText = "▶"; pose.send({image: video}); }
-    }
-
-    video.addEventListener('timeupdate', () => { seekBar.value = (video.currentTime / video.duration) * 100; });
-    seekBar.addEventListener('input', () => {
-        video.currentTime = (seekBar.value / 100) * video.duration;
-        pose.send({image: video}); // 탐색 시에도 실시간 분석 및 궤적 업데이트
-    });
-
-    function setBaseline() { baselineAngle = currentAngle; document.getElementById('base-val').innerText = `${baselineAngle}°`; }
-    function captureAndLog() {
-        if(baselineAngle === 0) { alert("먼저 기준자세를 등록하세요."); return; }
-        const record = { base: baselineAngle, curr: currentAngle, diff: currentAngle - baselineAngle, time: new Date().toLocaleTimeString() };
-        analysisHistory.push(record);
-        const row = document.getElementById('log-body').insertRow(0);
-        row.innerHTML = `<td>${analysisHistory.length}</td><td>${record.base}°</td><td>${record.curr}°</td><td>${record.diff > 0 ? "+" : ""}${record.diff}°</td>`;
-    }
-    function exportCSV() {
-        let csv = "\uFEFF회차,기준각도,분석각도,오차,기록시간\n";
-        analysisHistory.forEach((d, i) => { csv += `${i+1},${d.base},${d.curr},${d.diff},${d.time}\n`; });
+    function exportData() {
+        let csv = "\uFEFF릴리즈각도,몸기울기,영상시점(초)\n";
+        analysisLog.forEach(log => {
+            csv += `${log.angle},${log.balance},${log.time}\n`;
+        });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "KCA_비디오_궤적분석.csv"; link.click();
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "KCA_Pitching_Data.csv";
+        link.click();
     }
 </script>
 </body>
