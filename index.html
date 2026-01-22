@@ -3,43 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KCA AI 정밀 분석기 v12.0</title>
+    <title>KCA 골프형 정밀 분석기 v13.0</title>
     <style>
-        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --green: #00b894; --yellow: #f1c40f; }
+        :root { --red: #d63031; --blue: #0984e3; --dark: #000; --green: #00b894; --yellow: #f1c40f; }
         body { margin: 0; background: #f1f2f6; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        /* 헤더 및 설정 */
         .header { background: var(--dark); padding: 10px; text-align: center; }
-        .header img { height: 30px; }
+        .header img { height: 25px; }
+        
+        /* 분석 대시보드 - 골프 분석기 스타일 */
+        .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 10px; background: #1e272e; color: #fff; }
+        .stat-box { background: #2f3640; padding: 5px; border-radius: 5px; text-align: center; }
+        .label { font-size: 9px; color: #dcdde1; font-weight: bold; }
+        .val { font-size: 1.1rem; font-weight: 800; color: var(--yellow); }
 
-        .dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; padding: 10px; background: #fff; color: #333; border-bottom: 2px solid #ddd; }
-        .stat-box { background: #f8f9fa; padding: 8px; border-radius: 10px; text-align: center; border-bottom: 3px solid #ddd; }
-        .label { font-size: 10px; font-weight: bold; color: #666; }
-        .val { font-size: 1.1rem; font-weight: 800; }
-
-        /* 비디오 영역 */
-        .view-container { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+        .view-container { position: relative; flex: 1; background: #000; overflow: hidden; }
         video, canvas { position: absolute; width: 100%; height: 100%; object-fit: contain; }
-        .mirror { transform: scaleX(-1); }
-
-        /* 하단 컨트롤 및 로그 */
-        .ui-panel { background: #fff; padding: 12px; border-top: 1px solid #ddd; z-index: 100; overflow-y: auto; max-height: 50vh; }
         
-        .selection-group { display: flex; gap: 10px; margin-bottom: 10px; justify-content: center; }
-        .radio-label { font-size: 14px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-        .btn { padding: 15px; border: none; border-radius: 12px; font-weight: bold; font-size: 0.95rem; cursor: pointer; color: white; }
-        .btn-rec { background: var(--red); grid-column: span 2; }
-        .btn-stop { background: var(--dark); grid-column: span 2; animation: blink 1s infinite; }
+        .ui-panel { background: #fff; padding: 12px; border-top: 1px solid #ddd; z-index: 100; max-height: 40vh; overflow-y: auto; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .btn { padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 0.9rem; cursor: pointer; color: white; }
         
-        /* 실시간 데이터 테이블 */
-        .data-table-container { margin-top: 10px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; background: white; }
-        th { background: #f8f9fa; padding: 8px; border-bottom: 2px solid #ddd; }
-        td { padding: 6px; border-bottom: 1px solid #eee; }
-
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        /* 궤적 가이드 설정 */
+        .guide-line { position: absolute; border: 1px dashed rgba(255,255,255,0.5); pointer-events: none; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -50,34 +35,28 @@
 <div class="header"><img src="https://www.cornhole.kr/html/img/logo.png" alt="KCA"></div>
 
 <div class="dashboard">
-    <div class="stat-box"><div class="label">팔 각도</div><div class="val" id="angle-val">0°</div></div>
-    <div class="stat-box"><div class="label">선택 손</div><div class="val" id="hand-display">오른손</div></div>
-    <div class="stat-box"><div class="label">녹화시간</div><div class="val" id="rec-timer">0.0s</div></div>
+    <div class="stat-box"><div class="label">LIVE ANGLE</div><div class="val" id="angle-val">0°</div></div>
+    <div class="stat-box"><div class="label">MAX BACK</div><div class="val" id="max-back">0°</div></div>
+    <div class="stat-box"><div class="label">STANCE</div><div class="val" id="stance-val">OK</div></div>
+    <div class="stat-box"><div class="label">RELEASE</div><div class="val" id="rel-val">-</div></div>
 </div>
 
-<div class="view-container">
+<div class="view-container" id="container">
     <video id="input_video" playsinline muted style="display:none;"></video>
     <canvas id="output_canvas"></canvas>
+    <div class="guide-line" style="top:20%; bottom:20%; left:50%; width:0;"></div>
+    <div class="guide-line" style="left:10%; right:10%; top:50%; height:0;"></div>
 </div>
 
 <div class="ui-panel">
-    <div class="selection-group">
-        <label class="radio-label"><input type="radio" name="hand" value="right" checked onchange="updateHand()"> 오른손 피칭</label>
-        <label class="radio-label"><input type="radio" name="hand" value="left" onchange="updateHand()"> 왼손 피칭</label>
-    </div>
-
     <div class="btn-grid">
-        <button id="btn-start" class="btn btn-rec" onclick="startRecording()">🔴 분석 녹화 및 0.5s 데이터 수집 시작</button>
-        <button id="btn-stop" class="btn btn-stop" onclick="stopRecording()" style="display:none;">⏹ 녹화 중지 및 CSV 저장</button>
-        <button class="btn" style="background:var(--blue)" onclick="clearTrajectory()">✨ 궤적 초기화</button>
-        <button class="btn" style="background:#555" onclick="location.reload()">🔄 앱 리셋</button>
+        <button class="btn" style="background:var(--red); grid-column: span 2;" onclick="startAnalysis()">🔴 분석 및 녹화 시작</button>
+        <button class="btn" style="background:var(--dark)" onclick="clearCanvas()">✨ 궤적 초기화</button>
+        <button class="btn" style="background:var(--blue)" onclick="exportData()">📊 데이터 저장</button>
     </div>
-
-    <div class="data-table-container">
-        <table>
-            <thead><tr><th>시간(s)</th><th>각도(°)</th><th>X좌표</th><th>Y좌표</th></tr></thead>
-            <tbody id="data-log-body"></tbody>
-        </table>
+    <div style="margin-top:10px; font-size:11px; color:#666;">
+        * 파란색 궤적: 백스윙 / 빨간색 궤적: 전진 피칭<br>
+        * 중앙 가이드라인에 맞춰 몸의 축을 고정하세요.
     </div>
 </div>
 
@@ -86,32 +65,16 @@
     const canvas = document.getElementById('output_canvas');
     const ctx = canvas.getContext('2d');
     
-    let trajectoryPoints = [];
-    let mediaRecorder, recordedChunks = [];
-    let selectedHand = 'right';
-    let currentAngle = 0;
-    let currentWrist = {x: 0, y: 0};
-    let dataLog = [];
-    let recordInterval, timerInterval;
-    let startTime = 0;
+    let backTrajectory = []; // 백스윙 (파랑)
+    let forwardTrajectory = []; // 피칭 (빨강)
+    let isBackswing = true;
+    let prevWristY = 0;
+    let maxBackAngle = 0;
 
     const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
-    function calculateAngle(a, b, c) {
-        const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-        let angle = Math.abs(radians * 180.0 / Math.PI);
-        if (angle > 180.0) angle = 360 - angle;
-        return Math.round(angle);
-    }
-
-    function updateHand() {
-        selectedHand = document.querySelector('input[name="hand"]:checked').value;
-        document.getElementById('hand-display').innerText = selectedHand === 'right' ? '오른손' : '왼손';
-        clearTrajectory();
-    }
-
-    pose.onResults((results) => {
+    function onResults(results) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         ctx.save();
@@ -121,101 +84,56 @@
 
         if (results.poseLandmarks) {
             const lm = results.poseLandmarks;
-            // 인덱스 설정 (왼손: 11,13,15 / 오른손: 12,14,16)
-            const idx = selectedHand === 'right' ? [12, 14, 16] : [11, 13, 15];
-            
-            currentAngle = calculateAngle(lm[idx[0]], lm[idx[1]], lm[idx[2]]);
-            currentWrist = { x: Math.round(lm[idx[2]].x * 100), y: Math.round(lm[idx[2]].y * 100) };
-            
-            document.getElementById('angle-val').innerText = `${currentAngle}°`;
+            const wrist = lm[16]; // 오른손 기준
+            const elbow = lm[14];
+            const shoulder = lm[12];
 
-            // 궤적 처리
-            const wrist = lm[idx[2]];
-            if (wrist.visibility > 0.5) {
-                trajectoryPoints.push({x: wrist.x * canvas.width, y: wrist.y * canvas.height});
-                if (trajectoryPoints.length > 60) trajectoryPoints.shift();
+            // 1. 각도 계산
+            const radians = Math.atan2(wrist.y - elbow.y, wrist.x - elbow.x) - Math.atan2(shoulder.y - elbow.y, shoulder.x - elbow.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180) angle = 360 - angle;
+            angle = Math.round(angle);
+            document.getElementById('angle-val').innerText = `${angle}°`;
+
+            // 2. 백스윙 vs 피칭 전환 감지 (Y좌표 변화 기준)
+            if (wrist.y > prevWristY) isBackswing = true; // 내려가거나 뒤로 감
+            else isBackswing = false; // 위로 던짐
+            prevWristY = wrist.y;
+
+            if (isBackswing && angle > maxBackAngle) {
+                maxBackAngle = angle;
+                document.getElementById('max-back').innerText = `${maxBackAngle}°`;
             }
 
-            // 그리기
-            if (trajectoryPoints.length > 1) {
-                ctx.beginPath(); ctx.moveTo(trajectoryPoints[0].x, trajectoryPoints[0].y);
-                trajectoryPoints.forEach(p => ctx.lineTo(p.x, p.y));
-                ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 5; ctx.stroke();
+            // 3. 궤적 기록 (색상 구분)
+            const p = {x: wrist.x * canvas.width, y: wrist.y * canvas.height};
+            if (isBackswing) {
+                backTrajectory.push(p); if(backTrajectory.length > 30) backTrajectory.shift();
+            } else {
+                forwardTrajectory.push(p); if(forwardTrajectory.length > 30) forwardTrajectory.shift();
             }
-            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 3});
-            drawLandmarks(ctx, lm, {color: '#FF0000', radius: 2});
 
-            // 텍스트 오버레이
-            ctx.scale(-1, 1); ctx.fillStyle = "white"; ctx.font = "bold 18px sans-serif";
-            ctx.fillText(`Mode: ${selectedHand === 'right' ? 'R' : 'L'}`, -canvas.width + 20, 30);
-            ctx.fillText(`Angle: ${currentAngle}°`, -canvas.width + 20, 55);
+            // 4. 렌더링
+            drawTrajectory(backTrajectory, '#0984e3'); // 파랑
+            drawTrajectory(forwardTrajectory, '#d63031'); // 빨강
+            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#ffffff', lineWidth: 2});
+            drawLandmarks(ctx, lm, {color: '#f1c40f', radius: 2});
         }
         ctx.restore();
-    });
+    }
+
+    function drawTrajectory(points, color) {
+        if (points.length < 2) return;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        points.forEach(pt => ctx.lineTo(pt.x, pt.y));
+        ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.stroke();
+    }
 
     const camera = new Camera(video, { onFrame: async () => { await pose.send({image: video}); }, width: 1280, height: 720 });
     camera.start();
 
-    function clearTrajectory() { trajectoryPoints = []; }
-
-    // [로직] 0.5초 주기 데이터 수집 및 녹화
-    function startRecording() {
-        recordedChunks = []; dataLog = [];
-        document.getElementById('data-log-body').innerHTML = "";
-        
-        const types = ['video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
-        let sType = types.find(t => MediaRecorder.isTypeSupported(t));
-        mediaRecorder = new MediaRecorder(canvas.captureStream(30), { mimeType: sType });
-        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-        mediaRecorder.onstop = exportFiles;
-        
-        startTime = Date.now();
-        mediaRecorder.start();
-
-        // 0.5초 간격 데이터 추출
-        recordInterval = setInterval(() => {
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-            const entry = { time: elapsed, angle: currentAngle, x: currentWrist.x, y: currentWrist.y };
-            dataLog.push(entry);
-            
-            const row = document.getElementById('data-log-body').insertRow(0);
-            row.innerHTML = `<td>${entry.time}s</td><td>${entry.angle}°</td><td>${entry.x}</td><td>${entry.y}</td>`;
-        }, 500);
-
-        // 타이머 표시
-        timerInterval = setInterval(() => {
-            document.getElementById('rec-timer').innerText = ((Date.now() - startTime) / 1000).toFixed(1) + 's';
-        }, 100);
-
-        document.getElementById('btn-start').style.display = 'none';
-        document.getElementById('btn-stop').style.display = 'block';
-    }
-
-    function stopRecording() {
-        mediaRecorder.stop();
-        clearInterval(recordInterval);
-        clearInterval(timerInterval);
-        document.getElementById('btn-start').style.display = 'block';
-        document.getElementById('btn-stop').style.display = 'none';
-    }
-
-    function exportFiles() {
-        // 1. 비디오 저장
-        const vBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-        const vUrl = URL.createObjectURL(vBlob);
-        const vLink = document.createElement('a');
-        vLink.href = vUrl; vLink.download = `Pitch_Analysis_${Date.now()}.webm`; vLink.click();
-
-        // 2. CSV 데이터 저장
-        let csv = "\uFEFF시간(s),선택손,피칭각도(°),손목X,손목Y\n";
-        dataLog.forEach(d => {
-            csv += `${d.time},${selectedHand},${d.angle},${d.x},${d.y}\n`;
-        });
-        const cBlob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const cUrl = URL.createObjectURL(cBlob);
-        const cLink = document.createElement('a');
-        cLink.href = cUrl; cLink.download = `Pitch_Data_${Date.now()}.csv`; cLink.click();
-    }
+    function clearCanvas() { backTrajectory = []; forwardTrajectory = []; maxBackAngle = 0; }
 </script>
 </body>
 </html>
