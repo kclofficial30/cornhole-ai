@@ -3,38 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KCA AI 분석 데이터 센터 v6.0</title>
+    <title>KCA AI 비교 분석기 v7.0</title>
     <style>
-        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --yellow: #f1c40f; --green: #00b894; }
+        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --green: #00b894; --yellow: #f1c40f; }
         body { margin: 0; background: #f1f2f6; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* 로고 헤더 */
-        .header { background: var(--dark); padding: 12px; text-align: center; }
+        .header { background: var(--dark); padding: 10px; text-align: center; }
         .header img { height: 35px; }
 
-        /* 분석 대시보드 */
-        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; background: #fff; border-bottom: 2px solid #ddd; }
-        .stat-card { background: #f8f9fa; padding: 10px; border-radius: 8px; text-align: center; border-left: 4px solid var(--blue); }
-        .stat-label { font-size: 11px; color: #636e72; font-weight: bold; }
-        .stat-val { font-size: 1.5rem; font-weight: 800; color: var(--dark); }
+        /* [변경] 비교 대시보드 */
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; padding: 10px; background: #fff; border-bottom: 2px solid #ddd; }
+        .stat-box { background: #f8f9fa; padding: 8px; border-radius: 8px; text-align: center; border-bottom: 3px solid #ccc; }
+        .label { font-size: 10px; color: #636e72; font-weight: bold; margin-bottom: 2px; }
+        .val { font-size: 1.2rem; font-weight: 800; }
+        .diff-plus { color: var(--red); }
+        .diff-minus { color: var(--blue); }
 
         /* 비디오 영역 */
         .view-container { position: relative; flex: 1; background: #000; overflow: hidden; }
         video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
         .mirror { transform: scaleX(-1); }
 
-        /* 기록 컨트롤 */
-        .controls { padding: 15px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
-        .row { display: flex; gap: 8px; }
-        .btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer; color: white; }
-        .btn-record { background: var(--red); }
-        .btn-save { background: var(--green); }
-        
-        /* 데이터 로그 테이블 */
-        .data-log { height: 120px; overflow-y: auto; background: #eee; font-size: 11px; padding: 5px; }
-        table { width: 100%; border-collapse: collapse; background: white; }
-        th { background: #ddd; position: sticky; top: 0; }
-        td, th { padding: 5px; border: 1px solid #eee; text-align: center; }
+        /* 컨트롤 영역 */
+        .controls { padding: 15px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .btn { padding: 18px; border: none; border-radius: 12px; font-weight: bold; font-size: 1rem; color: white; cursor: pointer; }
+        .btn-base { background: var(--dark); } /* 기준점 설정 */
+        .btn-cap { background: var(--red); } /* 현재 캡처 */
+        .btn-save { background: var(--green); width: 100%; }
+
+        /* 기록 테이블 */
+        .log-container { height: 150px; overflow-y: auto; background: white; font-size: 11px; border-top: 1px solid #ddd; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; }
+        th { background: #f8f9fa; position: sticky; top: 0; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -42,18 +44,20 @@
 </head>
 <body>
 
-<div class="header">
-    <img src="https://www.cornhole.kr/html/img/logo.png" alt="KCA">
-</div>
+<div class="header"><img src="https://www.cornhole.kr/html/img/logo.png" alt="KCA"></div>
 
 <div class="dashboard">
-    <div class="stat-card">
-        <div class="stat-label">현재 팔 각도</div>
-        <div class="stat-val" id="live-angle">0°</div>
+    <div class="stat-box" style="border-color: var(--dark);">
+        <div class="label">기준(Standard)</div>
+        <div class="val" id="base-val">0°</div>
     </div>
-    <div class="stat-card" style="border-left-color: var(--red);">
-        <div class="stat-label">최대 스윙 각도</div>
-        <div class="stat-val" id="max-angle">0°</div>
+    <div class="stat-box" style="border-color: var(--red);">
+        <div class="label">현재(Current)</div>
+        <div class="val" id="curr-val">0°</div>
+    </div>
+    <div class="stat-box" style="border-color: var(--green);">
+        <div class="label">오차(Diff)</div>
+        <div class="val" id="diff-val">0°</div>
     </div>
 </div>
 
@@ -63,13 +67,15 @@
 </div>
 
 <div class="controls">
-    <div class="row">
-        <button class="btn btn-record" onclick="logData()">💾 현재 자세 수치 기록</button>
-        <button class="btn btn-save" onclick="exportData()">📊 엑셀 저장 (CSV)</button>
+    <div class="btn-group">
+        <button class="btn btn-base" onclick="setBaseline()">📐 기준자세 등록</button>
+        <button class="btn btn-cap" onclick="captureAndLog()">📸 현재 피칭 기록</button>
     </div>
-    <div class="data-log">
+    <button class="btn btn-save" onclick="exportCSV()">📊 분석 데이터 저장 (CSV)</button>
+    
+    <div class="log-container">
         <table>
-            <thead><tr><th>회차</th><th>각도</th><th>시간</th></tr></thead>
+            <thead><tr><th>회차</th><th>기준</th><th>기록</th><th>오차</th></tr></thead>
             <tbody id="log-body"></tbody>
         </table>
     </div>
@@ -80,11 +86,10 @@
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
     
-    let recordedData = [];
+    let baselineAngle = 0;
     let currentAngle = 0;
-    let maxAngle = 0;
+    let analysisHistory = [];
 
-    // 관절 사이의 각도를 계산하는 함수
     function calculateAngle(a, b, c) {
         const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
         let angle = Math.abs(radians * 180.0 / Math.PI);
@@ -100,59 +105,70 @@
         canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
         if (results.poseLandmarks) {
-            const landmarks = results.poseLandmarks;
-            
-            // 오른쪽 팔 관절 좌표 (어깨: 12, 팔꿈치: 14, 손목: 16)
-            const shoulder = landmarks[12];
-            const elbow = landmarks[14];
-            const wrist = landmarks[16];
-
-            if (shoulder && elbow && wrist) {
-                currentAngle = calculateAngle(shoulder, elbow, wrist);
-                document.getElementById('live-angle').innerText = `${currentAngle}°`;
+            const lm = results.poseLandmarks;
+            // 오른쪽 팔 (12:어깨, 14:팔꿈치, 16:손목)
+            if(lm[12] && lm[14] && lm[16]) {
+                currentAngle = calculateAngle(lm[12], lm[14], lm[16]);
+                document.getElementById('curr-val').innerText = `${currentAngle}°`;
                 
-                if(currentAngle > maxAngle) {
-                    maxAngle = currentAngle;
-                    document.getElementById('max-angle').innerText = `${maxAngle}°`;
+                // 오차 실시간 계산
+                if(baselineAngle > 0) {
+                    const diff = currentAngle - baselineAngle;
+                    const diffDisp = document.getElementById('diff-val');
+                    diffDisp.innerText = (diff > 0 ? "+" : "") + diff + "°";
+                    diffDisp.className = "val " + (diff >= 0 ? "diff-plus" : "diff-minus");
                 }
             }
-
-            drawConnectors(canvasCtx, landmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
-            drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2, radius: 3});
+            drawConnectors(canvasCtx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+            drawLandmarks(canvasCtx, lm, {color: '#FF0000', radius: 3});
         }
         canvasCtx.restore();
     }
 
     const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
     pose.onResults(onResults);
 
-    const camera = new Camera(videoElement, {
+    new Camera(videoElement, {
         onFrame: async () => { await pose.send({image: videoElement}); },
         width: 1280, height: 720
-    });
-    camera.start();
+    }).start();
 
-    // 데이터 로그 남기기
-    function logData() {
-        const time = new Date().toLocaleTimeString();
-        recordedData.push({ angle: currentAngle, time: time });
-        
-        const row = document.getElementById('log-body').insertRow(0);
-        row.innerHTML = `<td>${recordedData.length}</td><td>${currentAngle}°</td><td>${time}</td>`;
-        maxAngle = 0; // 기록 후 최대각도 초기화
+    // [로직] 기준점 설정
+    function setBaseline() {
+        baselineAngle = currentAngle;
+        document.getElementById('base-val').innerText = `${baselineAngle}°`;
+        alert("현재 각도가 기준 자세로 등록되었습니다: " + baselineAngle + "°");
     }
 
-    // 엑셀 저장
-    function exportData() {
-        let csv = "\uFEFF회차,투구각도,기록시간\n";
-        recordedData.forEach((d, i) => {
-            csv += `${i+1},${d.angle},${d.time}\n`;
+    // [로직] 현재 시점 캡처 및 로그 기록
+    function captureAndLog() {
+        if(baselineAngle === 0) {
+            alert("먼저 '기준자세 등록'을 완료해주세요.");
+            return;
+        }
+        const diff = currentAngle - baselineAngle;
+        const record = {
+            base: baselineAngle,
+            curr: currentAngle,
+            diff: diff,
+            time: new Date().toLocaleTimeString()
+        };
+        analysisHistory.push(record);
+
+        const row = document.getElementById('log-body').insertRow(0);
+        row.innerHTML = `<td>${analysisHistory.length}</td><td>${record.base}°</td><td>${record.curr}°</td><td class="${diff>=0?'diff-plus':'diff-minus'}">${diff > 0 ? "+" : ""}${diff}°</td>`;
+    }
+
+    function exportCSV() {
+        let csv = "\uFEFF회차,기준각도,투구각도,오차,기록시간\n";
+        analysisHistory.forEach((d, i) => {
+            csv += `${i+1},${d.base},${d.curr},${d.diff},${d.time}\n`;
         });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = "KCA_피칭분석데이터.csv";
+        link.download = "KCA_자세비교분석.csv";
         link.click();
     }
 </script>
