@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KCA AI 분석기 v5.0</title>
+    <style>
+        :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --yellow: #f1c40f; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+        /* 진단 메시지 창 */
+        #status-bar { background: rgba(0,0,0,0.8); padding: 10px; font-size: 12px; text-align: center; color: var(--yellow); z-index: 100; border-bottom: 1px solid #333; }
+
+        .view-container { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #111; }
+        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        .mirror { transform: scaleX(-1); }
+
+        /* 로딩 레이어 */
+        #loading-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+        .spinner { border: 4px solid #333; border-top: 4px solid var(--yellow); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .controls { padding: 20px; background: #000; display: flex; gap: 10px; z-index: 100; }
+        .btn { flex: 1; padding: 15px; border: none; border-radius: 10px; font-weight: bold; background: #333; color: white; cursor: pointer; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<div id="loading-layer">
+    <div class="spinner"></div>
+    <div id="loading-text">AI 엔진 데이터 로딩 중...</div>
+    <div style="font-size: 11px; color: #666; margin-top: 10px;">카톡 앱이 아닌 Safari/Chrome에서 열어주세요.</div>
+</div>
+
+<div id="status-bar">카메라 준비 중...</div>
+
+<div class="view-container">
+    <video id="input_video" playsinline muted></video>
+    <canvas id="output_canvas"></canvas>
+</div>
+
+<div class="controls">
+    <button class="btn" style="background:var(--blue)" onclick="toggleCamera()">📷 카메라 전환</button>
+    <button class="btn" onclick="location.reload()">🔄 다시 시도</button>
+</div>
+
+<script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const statusBar = document.getElementById('status-bar');
+    const loadingLayer = document.getElementById('loading-layer');
+
+    let camera = null;
+    let currentMode = 'user'; // 'user' 또는 'environment'
+
+    // 보안 환경 체크
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        alert("⚠️ [보안 경고] AI 카메라는 반드시 HTTPS 보안 주소에서만 작동합니다. GitHub Pages 등을 이용해 주세요.");
+    }
+
+    function onResults(results) {
+        if (loadingLayer.style.display !== 'none') {
+            loadingLayer.style.display = 'none';
+            statusBar.innerText = "분석 시작 - 전신이 나오도록 비춰주세요.";
+        }
+
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.poseLandmarks) {
+            drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+            drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2, radius: 3});
+        }
+        canvasCtx.restore();
+    }
+
+    const pose = new Pose({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
+    }});
+
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    pose.onResults(onResults);
+
+    async function startCamera() {
+        statusBar.innerText = "카메라 권한 요청 중...";
+        
+        if (camera) { await camera.stop(); }
+
+        // 전면 카메라일 때만 거울 효과
+        const isMirror = (currentMode === 'user');
+        videoElement.className = isMirror ? 'mirror' : '';
+        canvasElement.className = isMirror ? 'mirror' : '';
+
+        camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({image: videoElement});
+            },
+            facingMode: currentMode,
+            width: 1280,
+            height: 720
+        });
+
+        try {
+            await camera.start();
+        } catch (e) {
+            statusBar.innerText = "오류: 카메라를 찾을 수 없거나 권한이 거부되었습니다.";
+            console.error(e);
+        }
+    }
+
+    function toggleCamera() {
+        currentMode = (currentMode === 'user') ? 'environment' : 'user';
+        startCamera();
+    }
+
+    // 초기 실행
+    window.onload = startCamera;
+</script>
+</body>
+</html>
