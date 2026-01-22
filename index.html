@@ -3,31 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KCA AI 분석기 v11.0</title>
+    <title>KCA AI 리포터 v11.5</title>
     <style>
         :root { --red: #d63031; --blue: #0984e3; --dark: #000000; --green: #00b894; --yellow: #f1c40f; }
         body { margin: 0; background: #000; color: white; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* 상태 알림창 */
-        #debug-log { background: rgba(0,0,0,0.8); color: var(--yellow); font-size: 11px; padding: 10px; text-align: center; z-index: 1000; }
+        /* 대시보드 */
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 10px; background: #fff; color: #333; }
+        .stat-box { background: #f8f9fa; padding: 8px; border-radius: 10px; text-align: center; border-bottom: 3px solid #ddd; }
+        .label { font-size: 10px; font-weight: bold; color: #666; }
+        .val { font-size: 1.2rem; font-weight: 800; }
 
-        /* 메인 뷰어 */
+        /* 비디오 영역 */
         .view-container { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #111; }
-        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: contain; }
         .mirror { transform: scaleX(-1); }
 
-        /* 하단 컨트롤 */
-        .ui-panel { background: #fff; padding: 15px; border-top: 1px solid #ddd; z-index: 100; color: #333; }
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .btn { padding: 18px; border: none; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; color: white; }
-        .btn-cam { background: var(--blue); width: 100%; margin-bottom: 10px; }
+        /* 하단 컨트롤 패널 */
+        .ui-panel { background: #fff; padding: 15px; border-top: 1px solid #ddd; z-index: 100; display: flex; flex-direction: column; gap: 10px; }
+        .btn { padding: 15px; border: none; border-radius: 12px; font-weight: bold; font-size: 1rem; cursor: pointer; color: white; width: 100%; }
         .btn-rec { background: var(--red); }
-        .btn-stop { background: var(--dark); }
-
-        /* 로딩 레이어 */
-        #loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: #000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index: 2000; }
-        .spinner { border: 4px solid #333; border-top: 4px solid var(--yellow); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .btn-stop { background: var(--dark); animation: blink 1s infinite; }
+        .btn-clear { background: var(--blue); }
+        
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        #rec-status { font-size: 12px; text-align: center; color: var(--red); font-weight: bold; display: none; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -35,29 +35,25 @@
 </head>
 <body>
 
-<div id="loading-overlay">
-    <div class="spinner"></div>
-    <p>AI 모델 및 카메라 준비 중...</p>
+<div class="dashboard">
+    <div class="stat-box"><div class="label">팔 각도</div><div class="val" id="angle-val">0°</div></div>
+    <div class="stat-box"><div class="label">상체 밸런스</div><div class="val" id="balance-val">0°</div></div>
 </div>
 
-<div id="debug-log">카메라 권한 대기 중...</div>
-
 <div class="view-container">
-    <video id="input_video" playsinline muted autoplay></video>
+    <video id="input_video" playsinline muted style="display:none;"></video>
     <canvas id="output_canvas"></canvas>
 </div>
 
+<div id="rec-status">● 녹화 중... (데이터 포함)</div>
+
 <div class="ui-panel">
-    <button class="btn btn-cam" onclick="initCamera()">📸 카메라 켜기 / 재활성화</button>
+    <button id="btn-start" class="btn btn-rec" onclick="startRecording()">🔴 분석 영상 녹화 시작</button>
+    <button id="btn-stop" class="btn btn-stop" onclick="stopRecording()" style="display:none;">⏹ 녹화 중지 및 저장</button>
     
-    <div class="btn-grid">
-        <button id="rec-start" class="btn btn-rec" onclick="startRecording()">🔴 녹화 시작</button>
-        <button id="rec-stop" class="btn btn-stop" onclick="stopRecording()" style="display:none;">⏹ 중지 및 저장</button>
-        <button class="btn" style="background:var(--green)" onclick="location.reload()">🔄 초기화</button>
-    </div>
-    
-    <div style="margin-top:10px; font-size:11px; color:#888; text-align:center;">
-        * 아이폰: Safari 브라우저 권장 / 갤럭시: Chrome 권장
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <button class="btn btn-clear" onclick="clearTrajectory()">✨ 궤적 지우기</button>
+        <button class="btn" style="background:#555" onclick="location.reload()">🔄 초기화</button>
     </div>
 </div>
 
@@ -65,83 +61,129 @@
     const video = document.getElementById('input_video');
     const canvas = document.getElementById('output_canvas');
     const ctx = canvas.getContext('2d');
-    const debugLog = document.getElementById('debug-log');
-    const loadingOverlay = document.getElementById('loading-overlay');
-
-    let camera = null;
+    
+    let trajectoryPoints = [];
     let mediaRecorder, recordedChunks = [];
+    let currentAngle = 0, balanceAngle = 0;
 
     // AI 설정
     const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-    
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+
+    function calculateAngle(a, b, c) {
+        const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if (angle > 180.0) angle = 360 - angle;
+        return Math.round(angle);
+    }
+
     pose.onResults((results) => {
-        if (loadingOverlay.style.display !== 'none') {
-            loadingOverlay.style.display = 'none';
-            debugLog.innerText = "AI 분석 활발하게 작동 중";
-        }
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+        
         ctx.save();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 거울 모드 적용 (전면 카메라 기준)
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        
+        // 1. 원본 카메라 영상 그리기
         ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
         if (results.poseLandmarks) {
-            drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
-            drawLandmarks(ctx, results.poseLandmarks, {color: '#FF0000', radius: 2});
+            const lm = results.poseLandmarks;
+            
+            // 2. 수치 계산
+            currentAngle = calculateAngle(lm[12], lm[14], lm[16]);
+            balanceAngle = Math.abs(Math.round((lm[11].y - lm[12].y) * 100));
+            
+            // UI 업데이트
+            document.getElementById('angle-val').innerText = `${currentAngle}°`;
+            document.getElementById('balance-val').innerText = `${balanceAngle}`;
+
+            // 3. 궤적 추적 (손목 Index 16)
+            const wrist = lm[16];
+            if (wrist.visibility > 0.5) {
+                trajectoryPoints.push({x: wrist.x * canvas.width, y: wrist.y * canvas.height});
+                if (trajectoryPoints.length > 50) trajectoryPoints.shift();
+            }
+
+            // 4. 화면에 그리기 (뼈대, 궤적, 텍스트)
+            // 궤적 선
+            if (trajectoryPoints.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(trajectoryPoints[0].x, trajectoryPoints[0].y);
+                trajectoryPoints.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 6;
+                ctx.stroke();
+            }
+
+            // 뼈대
+            drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+            drawLandmarks(ctx, lm, {color: '#FF0000', radius: 2});
+
+            // 수치 오버레이 그리기 (녹화 영상에 포함시키기 위해 캔버스에 직접 씀)
+            ctx.scale(-1, 1); // 텍스트는 거울모드 해제
+            ctx.fillStyle = "white";
+            ctx.font = "bold 20px sans-serif";
+            ctx.fillText(`Angle: ${currentAngle}°`, -canvas.width + 20, 40);
+            ctx.fillText(`Balance: ${balanceAngle}`, -canvas.width + 20, 70);
         }
         ctx.restore();
     });
 
-    // 카메라 초기화 및 권한 요청 함수
-    async function initCamera() {
-        debugLog.innerText = "카메라 장치를 찾는 중...";
-        
-        try {
-            if (camera) { await camera.stop(); }
+    // 카메라 시작
+    const camera = new Camera(video, {
+        onFrame: async () => { await pose.send({image: video}); },
+        width: 1280, height: 720
+    });
+    camera.start();
 
-            camera = new Camera(video, {
-                onFrame: async () => { await pose.send({image: video}); },
-                facingMode: 'user', // 전면 카메라 (거울 모드)
-                width: 1280,
-                height: 720
-            });
+    // 궤적 초기화
+    function clearTrajectory() { trajectoryPoints = []; }
 
-            video.classList.add('mirror');
-            canvas.classList.add('mirror');
-
-            await camera.start();
-            debugLog.innerText = "카메라가 성공적으로 활성화되었습니다.";
-        } catch (err) {
-            debugLog.innerText = "오류: 카메라 권한이 거부되었거나 장치를 찾을 수 없습니다.";
-            console.error(err);
-        }
-    }
-
-    // 녹화 로직
-    function startRecording() {
+    // [중요] 녹화 로직 강화
+    async function startRecording() {
         recordedChunks = [];
-        const stream = canvas.captureStream(30);
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        // 캔버스에서 스트림 추출 (모든 분석 내용 포함)
+        const stream = canvas.captureStream(30); 
+        
+        // 브라우저별 지원 가능한 코덱 확인
+        const types = ['video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+        let supportedType = types.find(type => MediaRecorder.isTypeSupported(type));
+        
+        mediaRecorder = new MediaRecorder(stream, { mimeType: supportedType });
+
         mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
         mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const blob = new Blob(recordedChunks, { type: supportedType });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `KCA_Analysis_${Date.now()}.webm`; a.click();
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `KCA_Analysis_${Date.now()}.${supportedType.includes('mp4') ? 'mp4' : 'webm'}`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
         };
+
         mediaRecorder.start();
-        document.getElementById('rec-start').style.display = 'none';
-        document.getElementById('rec-stop').style.display = 'block';
+        document.getElementById('btn-start').style.display = 'none';
+        document.getElementById('btn-stop').style.display = 'block';
+        document.getElementById('rec-status').style.display = 'block';
     }
 
     function stopRecording() {
         mediaRecorder.stop();
-        document.getElementById('rec-start').style.display = 'block';
-        document.getElementById('rec-stop').style.display = 'none';
+        document.getElementById('btn-start').style.display = 'block';
+        document.getElementById('btn-stop').style.display = 'none';
+        document.getElementById('rec-status').style.display = 'none';
     }
-
-    // 페이지 로드 시 시도
-    window.onload = initCamera;
 </script>
 </body>
 </html>
